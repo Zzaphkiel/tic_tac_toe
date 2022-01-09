@@ -5,4 +5,4 @@ A Tic Tac Toe AI which base on Min-max Searching
 
 </br>
 
-`game.rs` 中的常量 `BOARD_WIDTH` 表示棋盘宽度， `CHESS_NUM_FOR_WIN` 表示获胜需要连起来的棋子数量，可以随意修改。
+`game.rs` 中的常量 `BOARD_WIDTH` 表示棋盘宽度， `CHESS_NUM_FOR_WIN` 表示获胜需要连起来的棋子数量，可以随意修改。当它们均为 3 的时候是井字棋。
