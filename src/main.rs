@@ -1,5 +1,5 @@
 mod game;
-use game::{Board, Player};
+use game::{Board, GameStage, Player, BOARD_WIDTH};
 use rand::Rng;
 use std::{io, process::Command};
 
@@ -15,7 +15,7 @@ fn read_position_and_check(board: &Board) -> (usize, usize) {
 
         input_position = (input_position.0 - 1, input_position.1 - 1);
 
-        if input_position.0 > 2 || input_position.1 > 2 {
+        if input_position.0 > BOARD_WIDTH - 1 || input_position.1 > BOARD_WIDTH - 1 {
             println!("illgeal position");
             continue;
         }
@@ -49,16 +49,20 @@ fn main() {
             board.print();
             player = player.exchange();
 
-            if let Some(player) = board.terminal_test() {
-                match player {
-                    Player::Max => println!("You lose."),
-                    Player::Min => println!("You Win"),
+            match board.terminal_test() {
+                GameStage::MaxWin => {
+                    println!("You lose.");
+                    break;
                 }
-
-                break;
-            } else if board.draw_test() {
-                println!("Draw");
-                break;
+                GameStage::MinWin => {
+                    println!("You win.");
+                    break;
+                }
+                GameStage::Draw => {
+                    println!("Draw.");
+                    break;
+                }
+                _ => {}
             }
         } else {
             first_turn = false;
@@ -70,16 +74,24 @@ fn main() {
         board = board.put(player.to_chess(), input_position);
         player = player.exchange();
 
-        if let Some(player) = board.terminal_test() {
-            match player {
-                Player::Max => println!("You lose."),
-                Player::Min => println!("You Win"),
+        match board.terminal_test() {
+            GameStage::MaxWin => {
+                println!("You lose.");
+                break;
             }
-
-            break;
-        } else if board.draw_test() {
-            println!("Draw");
-            break;
+            GameStage::MinWin => {
+                let _ = Command::new("cmd.exe").arg("/c").arg("cls").status();
+                board.print();
+                println!("You win.");
+                break;
+            }
+            GameStage::Draw => {
+                let _ = Command::new("cmd.exe").arg("/c").arg("cls").status();
+                board.print();
+                println!("Draw.");
+                break;
+            }
+            _ => {}
         }
     }
 
