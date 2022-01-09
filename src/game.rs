@@ -1,99 +1,285 @@
-mod game;
-use game::{Board, GameStage, Player, BOARD_WIDTH};
 use rand::Rng;
-use std::{io, process::Command};
+use std::cmp;
 
-fn read_position_and_check(board: &Board) -> (usize, usize) {
-    loop {
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).expect("Failed");
-        let mut nums = input.split_whitespace();
-        let mut input_position = (
-            nums.next().unwrap().parse().unwrap(),
-            nums.next().unwrap().parse().unwrap(),
-        );
+pub const BOARD_WIDTH: usize = 3;
+pub const CHESS_NUM_FOR_WIN: usize = 3;
 
-        input_position = (input_position.0 - 1, input_position.1 - 1);
+#[derive(Debug)]
+pub enum Player {
+    Max,
+    Min,
+}
 
-        if input_position.0 > BOARD_WIDTH - 1 || input_position.1 > BOARD_WIDTH - 1 {
-            println!("illgeal position");
-            continue;
+#[derive(Debug)]
+pub enum GameStage {
+    Ongoing,
+    MaxWin,
+    MinWin,
+    Draw,
+}
+
+impl Player {
+    pub fn to_chess(&self) -> Chess {
+        match self {
+            Player::Max => Chess::Cross,
+            Player::Min => Chess::Circle,
         }
+    }
 
-        if board.filled(input_position) {
-            println!("illegal position");
-            continue;
+    pub fn exchange(&self) -> Player {
+        match self {
+            Player::Max => Player::Min,
+            Player::Min => Player::Max,
         }
-
-        return input_position;
     }
 }
 
-fn main() {
-    let mut board = Board::new();
-    let user_first = rand::thread_rng().gen_range(0..2) == 1;
-    let mut player = match user_first {
-        true => Player::Min,
-        false => Player::Max,
-    };
-    let mut first_turn = true;
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Chess {
+    Cross,
+    Circle,
+}
 
-    loop {
-        let _ = Command::new("cmd.exe").arg("/c").arg("cls").status();
-        if (first_turn && !user_first) || !first_turn {
-            let position = board.minimax_decision();
-            // println!("I put at ({}, {})", position.0 + 1, position.1 + 1);
+impl Chess {
+    fn to_result(&self) -> GameStage {
+        match self {
+            Chess::Cross => GameStage::MaxWin,
+            Chess::Circle => GameStage::MinWin,
+        }
+    }
+}
 
-            board = board.put(player.to_chess(), position);
+#[derive(Debug, Clone)]
+pub struct Board(pub [[Option<Chess>; BOARD_WIDTH]; BOARD_WIDTH]);
 
-            board.print();
-            player = player.exchange();
+impl Board {
+    pub fn new() -> Board {
+        Board([[None; BOARD_WIDTH]; BOARD_WIDTH])
+    }
 
-            match board.terminal_test() {
-                GameStage::MaxWin => {
-                    println!("You lose.");
-                    break;
-                }
-                GameStage::MinWin => {
-                    println!("You win.");
-                    break;
-                }
-                GameStage::Draw => {
-                    println!("Draw.");
-                    break;
-                }
-                _ => {}
+    pub fn filled(&self, position: (usize, usize)) -> bool {
+        !self.0[position.0][position.1].is_none()
+    }
+
+    pub fn put(&self, chess: Chess, position: (usize, usize)) -> Board {
+        let mut board = self.clone();
+        board.0[position.0][position.1] = Some(chess);
+
+        board
+    }
+
+    pub fn terminal_test(&self) -> GameStage {
+        let check_vertical = |row: usize, col: usize| -> bool {
+            if row + CHESS_NUM_FOR_WIN > BOARD_WIDTH {
+                return false;
             }
-        } else {
-            first_turn = false;
-            board.print();
-            println!("You go first");
+
+            for i in 1..CHESS_NUM_FOR_WIN {
+                if self.0[row + i - 1][col] != self.0[row + i][col] {
+                    return false;
+                }
+            }
+
+            true
+        };
+
+        let check_horizontal = |row: usize, col: usize| -> bool {
+            if col + CHESS_NUM_FOR_WIN > BOARD_WIDTH {
+                return false;
+            }
+
+            for i in 1..CHESS_NUM_FOR_WIN {
+                if self.0[row][col + i - 1] != self.0[row][col + i] {
+                    return false;
+                }
+            }
+
+            true
+        };
+
+        let check_down_diagonal = |row: usize, col: usize| -> bool {
+            if row + CHESS_NUM_FOR_WIN > BOARD_WIDTH {
+                return false;
+            }
+
+            if col + CHESS_NUM_FOR_WIN > BOARD_WIDTH {
+                return false;
+            }
+
+            for i in 1..CHESS_NUM_FOR_WIN {
+                if self.0[row + i - 1][col + i - 1] != self.0[row + i][col + i] {
+                    return false;
+                }
+            }
+
+            true
+        };
+
+        let check_up_diagonal = |row: usize, col: usize| -> bool {
+            if col + CHESS_NUM_FOR_WIN > BOARD_WIDTH {
+                return false;
+            }
+
+            if row < CHESS_NUM_FOR_WIN - 1 {
+                return false;
+            }
+
+            for i in 1..CHESS_NUM_FOR_WIN {
+                if self.0[row - i + 1][col + i - 1] != self.0[row - i][col + i] {
+                    return false;
+                }
+            }
+
+            true
+        };
+
+        for row in 0..BOARD_WIDTH {
+            for col in 0..BOARD_WIDTH {
+                if check_vertical(row, col)
+                    || check_horizontal(row, col)
+                    || check_up_diagonal(row, col)
+                    || check_down_diagonal(row, col)
+                {
+                    if let Some(chess) = self.0[row][col] {
+                        return chess.to_result();
+                    }
+                }
+            }
         }
 
-        let input_position = read_position_and_check(&board);
-        board = board.put(player.to_chess(), input_position);
-        player = player.exchange();
+        for row in 0..BOARD_WIDTH {
+            for col in 0..BOARD_WIDTH {
+                if !self.filled((row, col)) {
+                    return GameStage::Ongoing;
+                }
+            }
+        }
 
-        match board.terminal_test() {
-            GameStage::MaxWin => {
-                println!("You lose.");
-                break;
+        GameStage::Draw
+    }
+
+    //                           (x,     y)
+    pub fn actions(&self) -> Vec<(usize, usize)> {
+        let mut result = vec![];
+
+        for row in 0..BOARD_WIDTH {
+            for col in 0..BOARD_WIDTH {
+                if !self.filled((row, col)) {
+                    result.push((row, col));
+                }
             }
-            GameStage::MinWin => {
-                let _ = Command::new("cmd.exe").arg("/c").arg("cls").status();
-                board.print();
-                println!("You win.");
-                break;
+        }
+
+        result
+    }
+
+    //                                (x,     y)
+    pub fn minimax_decision(&self) -> (usize, usize) {
+        let mut max_value = i32::min_value();
+
+        let mut win_positions = vec![];
+        let mut draw_positions = vec![];
+        let mut lose_positions = vec![];
+
+        for action in self.actions() {
+            let value = self.put(Chess::Cross, action).min_value();
+            if value > max_value {
+                max_value = value;
             }
-            GameStage::Draw => {
-                let _ = Command::new("cmd.exe").arg("/c").arg("cls").status();
-                board.print();
-                println!("Draw.");
-                break;
+
+            // println!(
+            //     "position = {:?}, value = {}",
+            //     (action.0 + 1, action.1 + 1),
+            //     value
+            // );
+
+            match value {
+                1 => win_positions.push(action),
+                0 => draw_positions.push(action),
+                _ => lose_positions.push(action),
             }
-            _ => {}
+        }
+
+        fn rand_usize(min: usize, max: usize) -> usize {
+            rand::thread_rng().gen_range(min..max)
+        }
+
+        match max_value {
+            1 => win_positions[rand_usize(0, win_positions.len())],
+            0 => draw_positions[rand_usize(0, draw_positions.len())],
+            _ => lose_positions[rand_usize(0, lose_positions.len())],
         }
     }
 
-    let _ = Command::new("cmd.exe").arg("/c").arg("pause").status();
+    pub fn max_value(&self) -> i32 {
+        let mut value = i32::min_value();
+
+        match self.terminal_test() {
+            GameStage::MaxWin => value = 1,
+            GameStage::MinWin => value = -1,
+            GameStage::Draw => value = 0,
+            GameStage::Ongoing => {
+                for action in self.actions() {
+                    let new_board = self.put(Chess::Cross, action);
+                    value = cmp::max(value, new_board.min_value());
+                }
+            }
+        }
+
+        value
+    }
+
+    pub fn min_value(&self) -> i32 {
+        let mut value = i32::max_value();
+
+        match self.terminal_test() {
+            GameStage::MaxWin => value = 1,
+            GameStage::MinWin => value = -1,
+            GameStage::Draw => value = 0,
+            GameStage::Ongoing => {
+                for action in self.actions() {
+                    let new_board = self.put(Chess::Circle, action);
+                    value = cmp::min(value, new_board.max_value());
+                }
+            }
+        }
+
+        value
+    }
+
+    pub fn print(&self) {
+        print!("    ");
+        for i in 0..BOARD_WIDTH {
+            print!("{}   ", i + 1);
+        }
+        println!("");
+
+        for i in 0..BOARD_WIDTH {
+            print!(" {} ", i + 1);
+            for j in 0..BOARD_WIDTH {
+                let mut ch: char = ' ';
+                if let Some(chess) = self.0[i][j] {
+                    ch = match chess {
+                        Chess::Circle => 'O',
+                        Chess::Cross => 'X',
+                    }
+                }
+                print!(" {:1} ", ch);
+                if j != BOARD_WIDTH - 1 {
+                    print!("│");
+                }
+            }
+
+            println!("");
+            if i != BOARD_WIDTH - 1 {
+                print!("   ───");
+                for _ in 0..BOARD_WIDTH - 1 {
+                    print!("┼───");
+                }
+                println!("");
+            }
+        }
+
+        println!("");
+    }
 }
