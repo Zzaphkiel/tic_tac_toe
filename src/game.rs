@@ -1,231 +1,99 @@
+mod game;
+use game::{Board, GameStage, Player, BOARD_WIDTH};
 use rand::Rng;
-use std::cmp;
+use std::{io, process::Command};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Player {
-    Max,
-    Min,
-}
+fn read_position_and_check(board: &Board) -> (usize, usize) {
+    loop {
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).expect("Failed");
+        let mut nums = input.split_whitespace();
+        let mut input_position = (
+            nums.next().unwrap().parse().unwrap(),
+            nums.next().unwrap().parse().unwrap(),
+        );
 
-impl Player {
-    pub fn to_chess(&self) -> Chess {
-        match self {
-            Player::Max => Chess::Cross,
-            Player::Min => Chess::Circle,
+        input_position = (input_position.0 - 1, input_position.1 - 1);
+
+        if input_position.0 > BOARD_WIDTH - 1 || input_position.1 > BOARD_WIDTH - 1 {
+            println!("illgeal position");
+            continue;
         }
-    }
 
-    pub fn exchange(&self) -> Player {
-        match self {
-            Player::Max => Player::Min,
-            Player::Min => Player::Max,
+        if board.filled(input_position) {
+            println!("illegal position");
+            continue;
         }
-    }
-}
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Chess {
-    Cross,
-    Circle,
-}
-
-impl Chess {
-    fn to_player(&self) -> Player {
-        match self {
-            Chess::Cross => Player::Max,
-            Chess::Circle => Player::Min,
-        }
+        return input_position;
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Board(pub [[Option<Chess>; 3]; 3]);
+fn main() {
+    let mut board = Board::new();
+    let user_first = rand::thread_rng().gen_range(0..2) == 1;
+    let mut player = match user_first {
+        true => Player::Min,
+        false => Player::Max,
+    };
+    let mut first_turn = true;
 
-impl Board {
-    pub fn new() -> Board {
-        Board([[None; 3]; 3])
-    }
+    loop {
+        let _ = Command::new("cmd.exe").arg("/c").arg("cls").status();
+        if (first_turn && !user_first) || !first_turn {
+            let position = board.minimax_decision();
+            // println!("I put at ({}, {})", position.0 + 1, position.1 + 1);
 
-    pub fn filled(&self, position: (usize, usize)) -> bool {
-        !self.0[position.0][position.1].is_none()
-    }
+            board = board.put(player.to_chess(), position);
 
-    pub fn put(&self, chess: Chess, position: (usize, usize)) -> Board {
-        let mut board = self.clone();
-        board.0[position.0][position.1] = Some(chess);
+            board.print();
+            player = player.exchange();
 
-        board
-    }
-
-    pub fn draw_test(&self) -> bool {
-        for col in 0..3 {
-            for row in 0..3 {
-                if !self.filled((row, col)) {
-                    return false;
+            match board.terminal_test() {
+                GameStage::MaxWin => {
+                    println!("You lose.");
+                    break;
                 }
-            }
-        }
-
-        true
-    }
-
-    pub fn terminal_test(&self) -> Option<Player> {
-        for row in 0..3 {
-            if self.0[row][0] == self.0[row][1] && self.0[row][1] == self.0[row][2] {
-                if let Some(chess) = self.0[row][0] {
-                    return Some(chess.to_player());
+                GameStage::MinWin => {
+                    println!("You win.");
+                    break;
                 }
-            }
-        }
-
-        for col in 0..3 {
-            if self.0[0][col] == self.0[1][col] && self.0[1][col] == self.0[2][col] {
-                if let Some(chess) = self.0[0][col] {
-                    return Some(chess.to_player());
+                GameStage::Draw => {
+                    println!("Draw.");
+                    break;
                 }
+                _ => {}
             }
-        }
-
-        if self.0[0][0] == self.0[1][1] && self.0[1][1] == self.0[2][2] {
-            if let Some(chess) = self.0[1][1] {
-                return Some(chess.to_player());
-            }
-        }
-
-        if self.0[2][0] == self.0[1][1] && self.0[1][1] == self.0[0][2] {
-            if let Some(chess) = self.0[1][1] {
-                return Some(chess.to_player());
-            }
-        }
-
-        None
-    }
-
-    //                           (x,     y)
-    pub fn actions(&self) -> Vec<(usize, usize)> {
-        let mut result = vec![];
-
-        for row in 0..3 {
-            for col in 0..3 {
-                if self.0[row][col].is_none() {
-                    result.push((row, col));
-                }
-            }
-        }
-
-        result
-    }
-
-    //                                (x,     y)
-    pub fn minimax_decision(&self) -> (usize, usize) {
-        let mut max_value = i32::min_value();
-
-        let mut win_positions = vec![];
-        let mut draw_positions = vec![];
-        let mut lose_positions = vec![];
-
-        for action in self.actions() {
-            let value = self.put(Chess::Cross, action).min_value();
-            if value > max_value {
-                max_value = value;
-            }
-
-            // println!(
-            //     "position = {:?}, value = {}",
-            //     (action.0 + 1, action.1 + 1),
-            //     value
-            // );
-
-            if value == -1 {
-                lose_positions.push(action);
-            } else if value == 0 {
-                draw_positions.push(action);
-            } else {
-                win_positions.push(action);
-            }
-        }
-
-        if max_value == -1 {
-            let rand_index = rand::thread_rng().gen_range(0..lose_positions.len());
-            return lose_positions[rand_index];
-        } else if max_value == 0 {
-            let rand_index = rand::thread_rng().gen_range(0..draw_positions.len());
-            return draw_positions[rand_index];
         } else {
-            let rand_index = rand::thread_rng().gen_range(0..win_positions.len());
-            return win_positions[rand_index];
-        }
-    }
-
-    pub fn max_value(&self) -> i32 {
-        let chess_result = self.terminal_test();
-        let mut value = i32::min_value();
-
-        if let Some(player) = chess_result {
-            value = match player {
-                Player::Max => 1,
-                Player::Min => -1,
-            };
-
-            return value;
-        } else if self.draw_test() {
-            return 0;
+            first_turn = false;
+            board.print();
+            println!("You go first");
         }
 
-        for action in self.actions() {
-            value = cmp::max(value, self.put(Chess::Cross, action).min_value());
-        }
+        let input_position = read_position_and_check(&board);
+        board = board.put(player.to_chess(), input_position);
+        player = player.exchange();
 
-        value
-    }
-
-    pub fn min_value(&self) -> i32 {
-        let chess_result = self.terminal_test();
-        let mut value = i32::max_value();
-
-        if let Some(player) = chess_result {
-            value = match player {
-                Player::Max => 1,
-                Player::Min => -1,
-            };
-
-            return value;
-        } else if self.draw_test() {
-            return 0;
-        }
-
-        for action in self.actions() {
-            value = cmp::min(value, self.put(Chess::Circle, action).max_value());
-        }
-
-        value
-    }
-
-    pub fn print(&self) {
-        println!("    1   2   3 ");
-
-        for i in 0..3 {
-            print!(" {} ", i + 1);
-            for j in 0..3 {
-                let mut ch: char = ' ';
-                if let Some(chess) = self.0[i][j] {
-                    ch = match chess {
-                        Chess::Circle => 'O',
-                        Chess::Cross => 'X',
-                    }
-                }
-                print!(" {:1} ", ch);
-                if j != 2 {
-                    print!("│");
-                }
+        match board.terminal_test() {
+            GameStage::MaxWin => {
+                println!("You lose.");
+                break;
             }
-
-            println!("");
-            if i != 2 {
-                println!("   ───┼───┼───");
+            GameStage::MinWin => {
+                let _ = Command::new("cmd.exe").arg("/c").arg("cls").status();
+                board.print();
+                println!("You win.");
+                break;
             }
+            GameStage::Draw => {
+                let _ = Command::new("cmd.exe").arg("/c").arg("cls").status();
+                board.print();
+                println!("Draw.");
+                break;
+            }
+            _ => {}
         }
-
-        println!("");
     }
+
+    let _ = Command::new("cmd.exe").arg("/c").arg("pause").status();
 }
