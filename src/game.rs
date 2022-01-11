@@ -177,12 +177,17 @@ impl Board {
     pub fn minimax_decision(&self) -> (usize, usize) {
         let mut max_value = i32::min_value();
 
-        let mut win_positions = vec![];
         let mut draw_positions = vec![];
         let mut lose_positions = vec![];
 
         for action in self.actions() {
-            let value = self.put(Chess::Cross, action).min_value();
+            let new_board = self.put(Chess::Cross, action);
+            let value = new_board.min_value(i32::min_value(), i32::max_value());
+
+            if value == 1 {
+                return action;
+            }
+
             if value > max_value {
                 max_value = value;
             }
@@ -194,7 +199,6 @@ impl Board {
             // );
 
             match value {
-                1 => win_positions.push(action),
                 0 => draw_positions.push(action),
                 _ => lose_positions.push(action),
             }
@@ -205,13 +209,12 @@ impl Board {
         }
 
         match max_value {
-            1 => win_positions[rand_usize(0, win_positions.len())],
             0 => draw_positions[rand_usize(0, draw_positions.len())],
             _ => lose_positions[rand_usize(0, lose_positions.len())],
         }
     }
 
-    pub fn max_value(&self) -> i32 {
+    pub fn max_value(&self, mut alpha: i32, beta: i32) -> i32 {
         let mut value = i32::min_value();
 
         match self.terminal_test() {
@@ -221,7 +224,13 @@ impl Board {
             GameStage::Ongoing => {
                 for action in self.actions() {
                     let new_board = self.put(Chess::Cross, action);
-                    value = cmp::max(value, new_board.min_value());
+                    value = cmp::max(value, new_board.min_value(alpha, beta));
+
+                    if value >= beta {
+                        return value;
+                    }
+
+                    alpha = cmp::max(alpha, value);
                 }
             }
         }
@@ -229,7 +238,7 @@ impl Board {
         value
     }
 
-    pub fn min_value(&self) -> i32 {
+    pub fn min_value(&self, alpha: i32, mut beta: i32) -> i32 {
         let mut value = i32::max_value();
 
         match self.terminal_test() {
@@ -239,7 +248,13 @@ impl Board {
             GameStage::Ongoing => {
                 for action in self.actions() {
                     let new_board = self.put(Chess::Circle, action);
-                    value = cmp::min(value, new_board.max_value());
+                    value = cmp::min(value, new_board.max_value(alpha, beta));
+
+                    if value <= alpha {
+                        return value;
+                    }
+
+                    beta = cmp::min(beta, value);
                 }
             }
         }
