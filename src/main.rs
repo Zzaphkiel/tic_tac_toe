@@ -1,7 +1,7 @@
-mod game;
-use game::{Board, GameStage, Player, BOARD_WIDTH};
 use rand::Rng;
 use std::{io, process::Command};
+
+use tic_tac_toe::{Board, GameStage, Player, BOARD_WIDTH};
 
 fn read_position_and_check(board: &Board) -> (usize, usize) {
     loop {
